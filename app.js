@@ -3,6 +3,9 @@ const sb = (C.SUPABASE_URL && window.supabase) ? supabase.createClient(C.SUPABAS
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const brl = n => (n == null || n === '') ? 'Consulte o valor' : Number(n).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+const hasPromo = p => p.price != null && p.old_price != null && Number(p.old_price) > Number(p.price);
+const off = p => Math.round((1 - p.price / p.old_price) * 100);
+const priceHtml = (p, withOff) => `<div class="pr">${hasPromo(p) ? `<s>${brl(p.old_price)}</s>` : ''}<span class="price">${brl(p.price)}</span>${withOff && hasPromo(p) ? `<small class="off">-${off(p)}%</small>` : ''}</div>`;
 const LEAF = '<svg viewBox="0 0 120 200" fill="currentColor"><path d="M62 150c-22-4-34-20-36-38 22 2 34 16 36 38zM64 120c20-6 30-22 30-40-20 4-30 20-30 40zM66 90c-20-6-28-22-28-38 20 4 28 18 28 38z"/></svg>';
 const WA = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20l1.3-4.2A8 8 0 1 1 8.4 18.8z"/></svg>';
 const DEFAULTS = {
@@ -54,7 +57,7 @@ function render() {
   const ids = subId !== 'all' ? [subId] : [catId, ...kids.map(c => c.id)];
   const q = query.trim().toLowerCase();
   const list = prods.filter(p => p.available !== false && (catId === 'all' || ids.includes(p.category_id)) && p.name.toLowerCase().includes(q));
-  $('#grid').innerHTML = list.map(p => `<button class="card" data-id="${esc(p.id)}"><div class="pic">${pic(p)}</div><div class="meta"><h3>${esc(p.name)}</h3><div class="price">${brl(p.price)}</div></div></button>`).join('');
+  $('#grid').innerHTML = list.map(p => `<button class="card" data-id="${esc(p.id)}"><div class="pic">${pic(p)}${hasPromo(p) ? `<span class="badge">-${off(p)}%</span>` : ''}</div><div class="meta"><h3>${esc(p.name)}</h3>${priceHtml(p)}</div></button>`).join('');
   $('#empty').hidden = list.length > 0;
   $('#payText').innerHTML = paras(cfg.payments || DEFAULTS.pay);
   $('#aboutText').innerHTML = paras(cfg.about || DEFAULTS.about);
@@ -67,13 +70,13 @@ $('#search').oninput = e => { query = e.target.value; render(); };
 $('#grid').onclick = e => { const b = e.target.closest('[data-id]'); if (b) openProduct(prods.find(p => p.id === b.dataset.id)); };
 
 function openProduct(p) {
-  const msg = `Olá! Quero fazer um pedido:\n*${p.name}*${catPath(p.category_id) ? '\nCategoria: ' + catPath(p.category_id) : ''}\nValor: ${brl(p.price)}`;
+  const msg = `Olá! Quero fazer um pedido:\n*${p.name}*${catPath(p.category_id) ? '\nCategoria: ' + catPath(p.category_id) : ''}\nValor: ${hasPromo(p) ? `de ${brl(p.old_price)} por ${brl(p.price)}` : brl(p.price)}`;
   const m = $('#modal');
   m.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(p.name)}">
     <button class="close" aria-label="Fechar">×</button>
     <div class="zoom" title="Toque para ampliar">${pic(p)}</div>
     <div class="body"><h2>${esc(p.name)}</h2><div class="cat">${esc(catPath(p.category_id))}</div>
-    <p class="desc">${esc(p.description)}</p><div class="price">${brl(p.price)}</div>
+    <p class="desc">${esc(p.description)}</p>${priceHtml(p, true)}
     <a class="btn" target="_blank" rel="noopener" href="https://wa.me/${C.WHATSAPP || '558391685057'}?text=${encodeURIComponent(msg)}">${WA} Pedir no WhatsApp</a></div></div>`;
   m.hidden = false; document.body.style.overflow = 'hidden';
   const z = m.querySelector('.zoom');
@@ -119,13 +122,14 @@ function adminPanel(tab, editing) {
     body = `<form id="pf"><input type="hidden" name="id" value="${esc(p.id)}">
       <label>Nome<input name="name" required value="${esc(p.name)}"></label>
       <label>Descrição<textarea name="description" rows="3">${esc(p.description)}</textarea></label>
-      <label>Preço (R$) — deixe vazio para "Consulte o valor"<input name="price" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.price)}"></label>
+      <label>Preço atual (R$) — deixe vazio para "Consulte o valor"<input name="price" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.price)}"></label>
+      <label>Preço antigo (R$), opcional — preencha só se estiver em promoção<input name="old_price" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.old_price)}"></label>
       <label>Categoria<select name="category_id"><option value="">Sem categoria</option>${catTree().map(c => `<option value="${esc(c.id)}" ${c.id === p.category_id ? 'selected' : ''}>${esc(catPath(c.id))}</option>`).join('')}</select></label>
       <label>Foto${p.image_url ? ' (envie outra para trocar)' : ''}<input name="photo" type="file" accept="image/*" ${p.id ? '' : 'required'}></label>
       <label class="chk"><input name="available" type="checkbox" ${p.available === false ? '' : 'checked'}> Visível na vitrine</label>
       <button class="btn">${p.id ? 'Salvar alterações' : 'Adicionar produto'}</button>
       ${p.id ? '<button class="btn alt" type="button" data-tab="produtos">Cancelar edição</button>' : ''}</form>
-      ${prods.map((x, i) => `<div class="row"><div class="mv"><button class="btn alt sm" data-up="${esc(x.id)}" aria-label="Subir" ${i === 0 ? 'disabled' : ''}>↑</button><button class="btn alt sm" data-dn="${esc(x.id)}" aria-label="Descer" ${i === prods.length - 1 ? 'disabled' : ''}>↓</button></div><img src="${esc(x.image_url)}" alt=""><div class="t"><b>${esc(x.name)}</b><small>${brl(x.price)}${x.available === false ? ' · oculto' : ''}</small></div>
+      ${prods.map((x, i) => `<div class="row"><div class="mv"><button class="btn alt sm" data-up="${esc(x.id)}" aria-label="Subir" ${i === 0 ? 'disabled' : ''}>↑</button><button class="btn alt sm" data-dn="${esc(x.id)}" aria-label="Descer" ${i === prods.length - 1 ? 'disabled' : ''}>↓</button></div><img src="${esc(x.image_url)}" alt=""><div class="t"><b>${esc(x.name)}</b><small>${hasPromo(x) ? 'promoção · ' : ''}${brl(x.price)}${x.available === false ? ' · oculto' : ''}</small></div>
       <button class="btn alt sm" data-edit="${esc(x.id)}">Editar</button><button class="btn alt sm" data-del="${esc(x.id)}">Excluir</button></div>`).join('')}`;
   } else if (tab === 'categorias') {
     body = `<form id="cf"><label>Nome<input name="name" required></label><label>Dentro de<select name="parent_id"><option value="">Nenhuma (categoria principal)</option>${cats.filter(c => !c.parent_id).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label><button class="btn">Adicionar</button></form>
@@ -185,7 +189,8 @@ function bindAdmin(tab) {
   if (pf) pf.onsubmit = async e => {
     e.preventDefault(); const f = e.target, btn = f.querySelector('.btn'); btn.disabled = true; btn.textContent = 'Salvando…';
     try {
-      const row = {name: f.name.value.trim(), description: f.description.value.trim(), price: f.price.value === '' ? null : Number(f.price.value), category_id: f.category_id.value || null, available: f.available.checked};
+      const row = {name: f.name.value.trim(), description: f.description.value.trim(), price: f.price.value === '' ? null : Number(f.price.value), old_price: f.old_price.value === '' ? null : Number(f.old_price.value), category_id: f.category_id.value || null, available: f.available.checked};
+      if (row.old_price != null && (row.price == null || row.old_price <= row.price)) { toast('O preço antigo precisa ser maior que o preço atual.'); btn.disabled = false; btn.textContent = f.id.value ? 'Salvar alterações' : 'Adicionar produto'; return; }
       if (f.photo.files[0]) row.image_url = await upload(f.photo.files[0]);
       if (!f.id.value) row.position = Math.max(0, ...prods.map(p => p.position || 0)) + 1;
       const r = f.id.value ? await sb.from('products').update(row).eq('id', f.id.value) : await sb.from('products').insert(row);
