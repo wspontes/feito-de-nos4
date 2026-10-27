@@ -9,11 +9,14 @@ const DEFAULTS = {
   pay: 'As formas de pagamento são combinadas pelo WhatsApp na hora do pedido.',
   about: 'Uma caneca. Um nome. Uma história.\nPresentes personalizados feitos com carinho, para acompanhar rotinas, afetos e memórias.\nEncomendas via WhatsApp.'
 };
-let cats = [], prods = [], cfg = {}, catId = 'all', query = '';
+let cats = [], prods = [], cfg = {}, catId = 'all', subId = 'all', query = '';
 
 const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 3200); };
 const paras = t => String(t).split('\n').filter(Boolean).map(l => `<p>${esc(l)}</p>`).join('');
 const catName = id => (cats.find(c => c.id === id) || {}).name || '';
+const catPath = id => { const c = cats.find(x => x.id === id); if (!c) return ''; const p = cats.find(x => x.id === c.parent_id); return p ? `${p.name} › ${c.name}` : c.name; };
+const kidsOf = id => cats.filter(c => c.parent_id === id);
+const catTree = () => cats.filter(c => !c.parent_id).flatMap(c => [c, ...kidsOf(c.id)]);
 const pic = p => p.image_url ? `<img src="${esc(p.image_url)}" alt="${esc(p.name)}" loading="lazy">` : LEAF;
 
 async function prodQ() {
@@ -40,27 +43,36 @@ async function load() {
 }
 
 function render() {
-  $('#chips').innerHTML = [{id: 'all', name: 'Todos'}, ...cats].map(c =>
+  const tops = cats.filter(c => !c.parent_id);
+  if (catId !== 'all' && !tops.some(c => c.id === catId)) catId = 'all';
+  const kids = kidsOf(catId);
+  if (subId !== 'all' && !kids.some(c => c.id === subId)) subId = 'all';
+  $('#chips').innerHTML = [{id: 'all', name: 'Todos'}, ...tops].map(c =>
     `<button class="chip" data-cat="${esc(c.id)}" aria-pressed="${c.id === catId}">${esc(c.name)}</button>`).join('');
+  const sc = $('#subchips'); sc.hidden = !kids.length;
+  sc.innerHTML = kids.length ? [{id: 'all', name: 'Todos'}, ...kids].map(c => `<button class="chip" data-sub="${esc(c.id)}" aria-pressed="${c.id === subId}">${esc(c.name)}</button>`).join('') : '';
+  const ids = subId !== 'all' ? [subId] : [catId, ...kids.map(c => c.id)];
   const q = query.trim().toLowerCase();
-  const list = prods.filter(p => p.available !== false && (catId === 'all' || p.category_id === catId) && p.name.toLowerCase().includes(q));
+  const list = prods.filter(p => p.available !== false && (catId === 'all' || ids.includes(p.category_id)) && p.name.toLowerCase().includes(q));
   $('#grid').innerHTML = list.map(p => `<button class="card" data-id="${esc(p.id)}"><div class="pic">${pic(p)}</div><div class="meta"><h3>${esc(p.name)}</h3><div class="price">${brl(p.price)}</div></div></button>`).join('');
   $('#empty').hidden = list.length > 0;
   $('#payText').innerHTML = paras(cfg.payments || DEFAULTS.pay);
   $('#aboutText').innerHTML = paras(cfg.about || DEFAULTS.about);
 }
 
-$('#chips').onclick = e => { const b = e.target.closest('[data-cat]'); if (b) { catId = b.dataset.cat; render(); } };
+$('#chips').insertAdjacentHTML('afterend', '<div class="chips sub" id="subchips" hidden></div>');
+$('#chips').onclick = e => { const b = e.target.closest('[data-cat]'); if (b) { catId = b.dataset.cat; subId = 'all'; render(); } };
+$('#subchips').onclick = e => { const b = e.target.closest('[data-sub]'); if (b) { subId = b.dataset.sub; render(); } };
 $('#search').oninput = e => { query = e.target.value; render(); };
 $('#grid').onclick = e => { const b = e.target.closest('[data-id]'); if (b) openProduct(prods.find(p => p.id === b.dataset.id)); };
 
 function openProduct(p) {
-  const msg = `Olá! Quero fazer um pedido:\n*${p.name}*${catName(p.category_id) ? '\nCategoria: ' + catName(p.category_id) : ''}\nValor: ${brl(p.price)}`;
+  const msg = `Olá! Quero fazer um pedido:\n*${p.name}*${catPath(p.category_id) ? '\nCategoria: ' + catPath(p.category_id) : ''}\nValor: ${brl(p.price)}`;
   const m = $('#modal');
   m.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(p.name)}">
     <button class="close" aria-label="Fechar">×</button>
     <div class="zoom" title="Toque para ampliar">${pic(p)}</div>
-    <div class="body"><h2>${esc(p.name)}</h2><div class="cat">${esc(catName(p.category_id))}</div>
+    <div class="body"><h2>${esc(p.name)}</h2><div class="cat">${esc(catPath(p.category_id))}</div>
     <p class="desc">${esc(p.description)}</p><div class="price">${brl(p.price)}</div>
     <a class="btn" target="_blank" rel="noopener" href="https://wa.me/${C.WHATSAPP || '558391685057'}?text=${encodeURIComponent(msg)}">${WA} Pedir no WhatsApp</a></div></div>`;
   m.hidden = false; document.body.style.overflow = 'hidden';
@@ -108,7 +120,7 @@ function adminPanel(tab, editing) {
       <label>Nome<input name="name" required value="${esc(p.name)}"></label>
       <label>Descrição<textarea name="description" rows="3">${esc(p.description)}</textarea></label>
       <label>Preço (R$) — deixe vazio para "Consulte o valor"<input name="price" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.price)}"></label>
-      <label>Categoria<select name="category_id"><option value="">Sem categoria</option>${cats.map(c => `<option value="${esc(c.id)}" ${c.id === p.category_id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+      <label>Categoria<select name="category_id"><option value="">Sem categoria</option>${catTree().map(c => `<option value="${esc(c.id)}" ${c.id === p.category_id ? 'selected' : ''}>${esc(catPath(c.id))}</option>`).join('')}</select></label>
       <label>Foto${p.image_url ? ' (envie outra para trocar)' : ''}<input name="photo" type="file" accept="image/*" ${p.id ? '' : 'required'}></label>
       <label class="chk"><input name="available" type="checkbox" ${p.available === false ? '' : 'checked'}> Visível na vitrine</label>
       <button class="btn">${p.id ? 'Salvar alterações' : 'Adicionar produto'}</button>
@@ -116,8 +128,8 @@ function adminPanel(tab, editing) {
       ${prods.map((x, i) => `<div class="row"><div class="mv"><button class="btn alt sm" data-up="${esc(x.id)}" aria-label="Subir" ${i === 0 ? 'disabled' : ''}>↑</button><button class="btn alt sm" data-dn="${esc(x.id)}" aria-label="Descer" ${i === prods.length - 1 ? 'disabled' : ''}>↓</button></div><img src="${esc(x.image_url)}" alt=""><div class="t"><b>${esc(x.name)}</b><small>${brl(x.price)}${x.available === false ? ' · oculto' : ''}</small></div>
       <button class="btn alt sm" data-edit="${esc(x.id)}">Editar</button><button class="btn alt sm" data-del="${esc(x.id)}">Excluir</button></div>`).join('')}`;
   } else if (tab === 'categorias') {
-    body = `<form id="cf"><label>Nova categoria<input name="name" required></label><button class="btn">Adicionar categoria</button></form>
-      ${cats.map(c => `<div class="row"><div class="t"><b>${esc(c.name)}</b></div><button class="btn alt sm" data-ren="${esc(c.id)}">Renomear</button><button class="btn alt sm" data-delc="${esc(c.id)}">Excluir</button></div>`).join('')}`;
+    body = `<form id="cf"><label>Nome<input name="name" required></label><label>Dentro de<select name="parent_id"><option value="">Nenhuma (categoria principal)</option>${cats.filter(c => !c.parent_id).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label><button class="btn">Adicionar</button></form>
+      ${catTree().map(c => `<div class="row"${c.parent_id ? ' style="padding-left:20px"' : ''}><div class="t"><b>${c.parent_id ? '↳ ' : ''}${esc(c.name)}</b></div><button class="btn alt sm" data-ren="${esc(c.id)}">Renomear</button><button class="btn alt sm" data-delc="${esc(c.id)}">Excluir</button></div>`).join('')}`;
   } else {
     body = `<form id="tf"><label>Formas de pagamento (uma linha por parágrafo)<textarea name="payments" rows="5">${esc(cfg.payments || DEFAULTS.pay)}</textarea></label>
       <label>Sobre (uma linha por parágrafo)<textarea name="about" rows="6">${esc(cfg.about || DEFAULTS.about)}</textarea></label><button class="btn">Salvar textos</button></form>`;
@@ -164,6 +176,7 @@ function bindAdmin(tab) {
       else if (d.up || d.dn) await move(d.up || d.dn, d.up ? -1 : 1);
       else if (d.edit) { adminPanel('produtos', prods.find(p => p.id === d.edit)); a.scrollTo(0, 0); }
       else if (d.del && confirm('Excluir este produto?')) { const r = await sb.from('products').delete().eq('id', d.del); if (r.error) throw r.error; refresh('produtos', 'Produto excluído.'); }
+      else if (d.delc && kidsOf(d.delc).length) toast('Exclua primeiro as subcategorias desta categoria.');
       else if (d.delc && confirm('Excluir categoria? Os produtos dela ficam sem categoria.')) { const r = await sb.from('categories').delete().eq('id', d.delc); if (r.error) throw r.error; refresh('categorias', 'Categoria excluída.'); }
       else if (d.ren) { const n = prompt('Novo nome da categoria:', catName(d.ren)); if (n && n.trim()) { const r = await sb.from('categories').update({name: n.trim()}).eq('id', d.ren); if (r.error) throw r.error; refresh('categorias', 'Categoria renomeada.'); } }
     } catch (err) { fail(err); }
@@ -182,7 +195,7 @@ function bindAdmin(tab) {
   };
   if (cf) cf.onsubmit = async e => {
     e.preventDefault();
-    const r = await sb.from('categories').insert({name: e.target.name.value.trim(), position: cats.length + 1});
+    const r = await sb.from('categories').insert({name: e.target.name.value.trim(), position: cats.length + 1, parent_id: e.target.parent_id.value || null});
     r.error ? fail(r.error) : refresh('categorias', 'Categoria adicionada.');
   };
   if (tf) tf.onsubmit = async e => {
