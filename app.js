@@ -16,6 +16,11 @@ const paras = t => String(t).split('\n').filter(Boolean).map(l => `<p>${esc(l)}<
 const catName = id => (cats.find(c => c.id === id) || {}).name || '';
 const pic = p => p.image_url ? `<img src="${esc(p.image_url)}" alt="${esc(p.name)}" loading="lazy">` : LEAF;
 
+async function prodQ() {
+  const r = await sb.from('products').select('*').order('position').order('created_at', {ascending: false});
+  return r.error ? sb.from('products').select('*').order('created_at', {ascending: false}) : r;
+}
+
 async function load() {
   if (!sb) {
     cats = ['Canecas', 'Quadros', 'Azulejos'].map((name, i) => ({id: 'c' + i, name}));
@@ -25,7 +30,7 @@ async function load() {
   } else {
     const [c, p, s] = await Promise.all([
       sb.from('categories').select('*').order('position').order('created_at'),
-      sb.from('products').select('*').order('created_at', {ascending: false}),
+      prodQ(),
       sb.from('settings').select('*')]);
     if (c.error || p.error) toast('Não foi possível carregar os produtos.');
     cats = c.data || []; prods = p.data || [];
@@ -108,7 +113,7 @@ function adminPanel(tab, editing) {
       <label class="chk"><input name="available" type="checkbox" ${p.available === false ? '' : 'checked'}> Visível na vitrine</label>
       <button class="btn">${p.id ? 'Salvar alterações' : 'Adicionar produto'}</button>
       ${p.id ? '<button class="btn alt" type="button" data-tab="produtos">Cancelar edição</button>' : ''}</form>
-      ${prods.map(x => `<div class="row"><img src="${esc(x.image_url)}" alt=""><div class="t"><b>${esc(x.name)}</b><small>${brl(x.price)}${x.available === false ? ' · oculto' : ''}</small></div>
+      ${prods.map((x, i) => `<div class="row"><div class="mv"><button class="btn alt sm" data-up="${esc(x.id)}" aria-label="Subir" ${i === 0 ? 'disabled' : ''}>↑</button><button class="btn alt sm" data-dn="${esc(x.id)}" aria-label="Descer" ${i === prods.length - 1 ? 'disabled' : ''}>↓</button></div><img src="${esc(x.image_url)}" alt=""><div class="t"><b>${esc(x.name)}</b><small>${brl(x.price)}${x.available === false ? ' · oculto' : ''}</small></div>
       <button class="btn alt sm" data-edit="${esc(x.id)}">Editar</button><button class="btn alt sm" data-del="${esc(x.id)}">Excluir</button></div>`).join('')}`;
   } else if (tab === 'categorias') {
     body = `<form id="cf"><label>Nova categoria<input name="name" required></label><button class="btn">Adicionar categoria</button></form>
@@ -117,7 +122,7 @@ function adminPanel(tab, editing) {
     body = `<form id="tf"><label>Formas de pagamento (uma linha por parágrafo)<textarea name="payments" rows="5">${esc(cfg.payments || DEFAULTS.pay)}</textarea></label>
       <label>Sobre (uma linha por parágrafo)<textarea name="about" rows="6">${esc(cfg.about || DEFAULTS.about)}</textarea></label><button class="btn">Salvar textos</button></form>`;
   }
-  adm().innerHTML = `<div class="adm"><h2>Painel da loja</h2><div class="bar">${tabs}<button class="btn alt sm" data-out style="margin-left:auto">Sair</button></div>${body}</div>`;
+  adm().innerHTML = `<div class="adm"><h2>Painel da loja</h2><div class="bar">${tabs}<button class="btn alt sm" data-close style="margin-left:auto">Fechar</button><button class="btn alt sm" data-out>Sair</button></div>${body}</div>`;
   bindAdmin(tab);
 }
 
@@ -137,6 +142,16 @@ async function upload(file) {
   return sb.storage.from('produtos').getPublicUrl(path).data.publicUrl;
 }
 
+async function move(id, dir) {
+  const i = prods.findIndex(p => p.id === id), j = i + dir;
+  if (i < 0 || j < 0 || j >= prods.length) return;
+  const a = prods.slice(); [a[i], a[j]] = [a[j], a[i]];
+  const rs = await Promise.all(a.map((p, k) => p.position === k + 1 ? null : sb.from('products').update({position: k + 1}).eq('id', p.id)).filter(Boolean));
+  const bad = rs.find(r => r.error);
+  if (bad) return fail(bad.error);
+  refresh('produtos');
+}
+
 function bindAdmin(tab) {
   const a = adm();
   a.onclick = async e => {
@@ -144,7 +159,9 @@ function bindAdmin(tab) {
     const d = t.dataset;
     try {
       if (d.tab) adminPanel(d.tab);
-      else if (d.out) { await sb.auth.signOut(); closeAdmin(); }
+      else if ('out' in d) { await sb.auth.signOut(); closeAdmin(); }
+      else if ('close' in d) closeAdmin();
+      else if (d.up || d.dn) await move(d.up || d.dn, d.up ? -1 : 1);
       else if (d.edit) { adminPanel('produtos', prods.find(p => p.id === d.edit)); a.scrollTo(0, 0); }
       else if (d.del && confirm('Excluir este produto?')) { const r = await sb.from('products').delete().eq('id', d.del); if (r.error) throw r.error; refresh('produtos', 'Produto excluído.'); }
       else if (d.delc && confirm('Excluir categoria? Os produtos dela ficam sem categoria.')) { const r = await sb.from('categories').delete().eq('id', d.delc); if (r.error) throw r.error; refresh('categorias', 'Categoria excluída.'); }
@@ -157,6 +174,7 @@ function bindAdmin(tab) {
     try {
       const row = {name: f.name.value.trim(), description: f.description.value.trim(), price: f.price.value === '' ? null : Number(f.price.value), category_id: f.category_id.value || null, available: f.available.checked};
       if (f.photo.files[0]) row.image_url = await upload(f.photo.files[0]);
+      if (!f.id.value) row.position = Math.max(0, ...prods.map(p => p.position || 0)) + 1;
       const r = f.id.value ? await sb.from('products').update(row).eq('id', f.id.value) : await sb.from('products').insert(row);
       if (r.error) throw r.error;
       refresh('produtos', 'Produto salvo.');
