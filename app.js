@@ -114,7 +114,7 @@ const closeAdmin = () => { adm().hidden = true; document.body.style.overflow = '
 
 function adminPanel(tab, editing) {
   adm().hidden = false; document.body.style.overflow = 'hidden';
-  const tabs = [['produtos', 'Produtos'], ['categorias', 'Categorias'], ['textos', 'Textos']]
+  const tabs = [['produtos', 'Produtos'], ['categorias', 'Categorias'], ['pedidos', 'Pedidos'], ['textos', 'Textos']]
     .map(([k, n]) => `<button class="chip" data-tab="${k}" aria-pressed="${k === tab}">${n}</button>`).join('');
   let body = '';
   if (tab === 'produtos') {
@@ -131,6 +131,8 @@ function adminPanel(tab, editing) {
       ${p.id ? '<button class="btn alt" type="button" data-tab="produtos">Cancelar edição</button>' : ''}</form>
       ${prods.map((x, i) => `<div class="row"><div class="mv"><button class="btn alt sm" data-up="${esc(x.id)}" aria-label="Subir" ${i === 0 ? 'disabled' : ''}>↑</button><button class="btn alt sm" data-dn="${esc(x.id)}" aria-label="Descer" ${i === prods.length - 1 ? 'disabled' : ''}>↓</button></div><img src="${esc(x.image_url)}" alt=""><div class="t"><b>${esc(x.name)}</b><small>${hasPromo(x) ? 'promoção · ' : ''}${brl(x.price)}${x.available === false ? ' · oculto' : ''}</small></div>
       <button class="btn alt sm" data-edit="${esc(x.id)}">Editar</button><button class="btn alt sm" data-del="${esc(x.id)}">Excluir</button></div>`).join('')}`;
+  } else if (tab === 'pedidos') {
+    body = '<div id="pedlist"><p>Carregando…</p></div>';
   } else if (tab === 'categorias') {
     body = `<form id="cf"><label>Nome<input name="name" required></label><label>Dentro de<select name="parent_id"><option value="">Nenhuma (categoria principal)</option>${cats.filter(c => !c.parent_id).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label><button class="btn">Adicionar</button></form>
       ${catTree().map(c => `<div class="row"${c.parent_id ? ' style="padding-left:20px"' : ''}><div class="t"><b>${c.parent_id ? '↳ ' : ''}${esc(c.name)}</b></div><button class="btn alt sm" data-ren="${esc(c.id)}">Renomear</button><button class="btn alt sm" data-delc="${esc(c.id)}">Excluir</button></div>`).join('')}`;
@@ -140,6 +142,7 @@ function adminPanel(tab, editing) {
   }
   adm().innerHTML = `<div class="adm"><h2>Painel da loja</h2><div class="bar">${tabs}<button class="btn alt sm" data-close style="margin-left:auto">Fechar</button><button class="btn alt sm" data-out>Sair</button></div>${body}</div>`;
   bindAdmin(tab);
+  if (tab === 'pedidos') loadPedidos();
 }
 
 const refresh = async (tab, msg) => { await load(); adminPanel(tab); if (msg) toast(msg); };
@@ -168,6 +171,17 @@ async function move(id, dir) {
   refresh('produtos');
 }
 
+let peds = [];
+const okUrl = u => typeof u === 'string' && u.startsWith('https://');
+async function loadPedidos() {
+  const box = $('#pedlist'); if (!box) return;
+  const {data, error} = await sb.from('pedidos').select('*').order('created_at', {ascending: false}).limit(100);
+  if (error) { box.innerHTML = '<p>Não foi possível carregar os pedidos. Confira se o SQL dos pedidos foi rodado no Supabase.</p>'; return; }
+  peds = data || [];
+  const lk = (u, t) => okUrl(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener">${t}</a>` : '';
+  box.innerHTML = peds.length ? peds.map(o => `<div class="row" style="flex-wrap:wrap"><div class="t" style="white-space:normal;flex-basis:100%"><b style="white-space:normal">#${esc(o.id.slice(0, 6).toUpperCase())}${o.nome ? ' · ' + esc(o.nome) : ''}</b><small style="display:block">${new Date(o.created_at).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})} · ${o.status === 'concluido' ? 'concluído' : 'novo'}</small>${o.observacoes ? `<small style="display:block">${esc(o.observacoes)}</small>` : ''}<small style="display:block">${[lk(o.previa_url, 'Prévia'), lk(o.arte_url, 'Arte final'), lk(o.original_url, 'Original')].filter(Boolean).join(' · ')}</small></div><button class="btn alt sm" data-done="${esc(o.id)}">${o.status === 'concluido' ? 'Reabrir' : 'Concluir'}</button><button class="btn alt sm" data-delp="${esc(o.id)}">Excluir</button></div>`).join('') : '<p>Nenhum pedido personalizado ainda.</p>';
+}
+
 function bindAdmin(tab) {
   const a = adm();
   a.onclick = async e => {
@@ -180,6 +194,12 @@ function bindAdmin(tab) {
       else if (d.up || d.dn) await move(d.up || d.dn, d.up ? -1 : 1);
       else if (d.edit) { adminPanel('produtos', prods.find(p => p.id === d.edit)); a.scrollTo(0, 0); }
       else if (d.del && confirm('Excluir este produto?')) { const r = await sb.from('products').delete().eq('id', d.del); if (r.error) throw r.error; refresh('produtos', 'Produto excluído.'); }
+      else if (d.done) { const o = peds.find(x => x.id === d.done); const u = await sb.from('pedidos').update({status: o && o.status === 'concluido' ? 'novo' : 'concluido'}).eq('id', d.done); if (u.error) throw u.error; loadPedidos(); }
+      else if (d.delp && confirm('Excluir este pedido e os arquivos enviados?')) {
+        const {data: fs} = await sb.storage.from('pedidos').list(d.delp);
+        if (fs && fs.length) await sb.storage.from('pedidos').remove(fs.map(f => `${d.delp}/${f.name}`));
+        const dl = await sb.from('pedidos').delete().eq('id', d.delp); if (dl.error) throw dl.error; loadPedidos(); toast('Pedido excluído.');
+      }
       else if (d.delc && kidsOf(d.delc).length) toast('Exclua primeiro as subcategorias desta categoria.');
       else if (d.delc && confirm('Excluir categoria? Os produtos dela ficam sem categoria.')) { const r = await sb.from('categories').delete().eq('id', d.delc); if (r.error) throw r.error; refresh('categorias', 'Categoria excluída.'); }
       else if (d.ren) { const n = prompt('Novo nome da categoria:', catName(d.ren)); if (n && n.trim()) { const r = await sb.from('categories').update({name: n.trim()}).eq('id', d.ren); if (r.error) throw r.error; refresh('categorias', 'Categoria renomeada.'); } }
@@ -210,4 +230,8 @@ function bindAdmin(tab) {
   };
 }
 
+const hp = document.querySelector('.hero p');
+if (hp) hp.insertAdjacentHTML('afterend', '<a class="btn" href="monte.html" style="display:inline-flex;width:auto;padding:12px 28px;margin-top:20px">Monte a sua caneca</a>');
+const ft = document.querySelector('footer');
+if (ft) ft.insertAdjacentHTML('afterbegin', '<a href="monte.html">Monte a sua caneca</a>');
 load();

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monte sua caneca — Feito de Nós</title>
+<meta name="description" content="Envie a sua imagem, veja como fica na caneca e encomende pelo WhatsApp.">
+<meta name="theme-color" content="#F6EFE3">
+<link rel="icon" href="assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Allura&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="monte.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html" aria-label="Voltar à vitrine"><img src="assets/logo.png" alt="" width="46" height="46"><span>Feito de Nós</span></a>
+  <nav><a href="index.html#vitrine">← Voltar à vitrine</a></nav>
+</header>
+<main class="monte">
+  <section class="intro">
+    <h1>Monte sua caneca</h1>
+    <p>Envie a imagem que você quiser, ajuste o tamanho e a posição e veja como fica. Valor sob consulta, combinado pelo WhatsApp.</p>
+  </section>
+  <input type="file" id="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+  <label class="drop" id="drop" for="file"><strong>Toque para escolher a sua imagem</strong><span>JPG, PNG ou WebP. Quanto maior a imagem, melhor a impressão.</span></label>
+  <div class="work" id="work" hidden>
+    <section class="panel">
+      <h2>1. Ajuste a imagem</h2>
+      <canvas id="edit" aria-label="Área de impressão da caneca"></canvas>
+      <p class="hint">Arraste para mover. Use dois dedos (ou a roda do mouse) para ampliar. A arte dá a volta na caneca: o meio aparece de frente.</p>
+      <div class="ctl">
+        <label>Tamanho <input type="range" id="size" min="0" max="100" value="50"></label>
+        <label>Girar <input type="range" id="rot" min="-180" max="180" value="0"></label>
+      </div>
+      <div class="btns">
+        <button class="btn alt sm" id="fit">Ajustar</button><button class="btn alt sm" id="fill">Preencher</button>
+        <button class="btn alt sm" id="center">Centralizar</button><button class="btn alt sm" id="r90">Girar 90°</button>
+        <button class="btn alt sm" id="change">Trocar imagem</button>
+      </div>
+      <div class="qual" id="qual"></div>
+    </section>
+    <section class="panel">
+      <h2>2. Veja na caneca</h2>
+      <canvas id="mock" width="1000" height="800" aria-label="Prévia na caneca"></canvas>
+      <div class="ctl"><label>Girar a caneca <input type="range" id="turn" min="0" max="100" value="50"></label></div>
+    </section>
+    <section class="panel">
+      <h2>3. Encomende</h2>
+      <div class="f">
+        <label>Seu nome (opcional)<input id="nome" maxlength="80" autocomplete="name"></label>
+        <label>Observações (opcional)<textarea id="obs" rows="3" maxlength="600" placeholder="Ex.: escrever o nome Maria embaixo da imagem"></textarea></label>
+        <input id="site" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
+        <button class="btn" id="order">Encomendar pelo WhatsApp</button>
+      </div>
+      <p class="small">Ao encomendar, a sua imagem é enviada para a loja. A prévia é uma simulação: a arte final é confirmada com você no WhatsApp antes da produção. Você é responsável pelos direitos da imagem enviada.</p>
+      <div class="done" id="done" hidden></div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast" role="status"></div>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="monte.js"></script>
+</body>
+</html>
