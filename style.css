@@ -89,30 +89,26 @@ footer{display:flex;flex-direction:column;align-items:center;gap:2px;padding:26p
 .pay-cards {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 16px;
   justify-content: center;
-  margin: 24px 0;
+  margin: 18px 0;
 }
 .pay-cards img {
   width: 100%;
-  max-width: 320px;
+  max-width: 240px;
   border-radius: 50%;
   border: 4px solid var(--paper);
-  box-shadow: 0 8px 24px rgba(74,63,54,.12);
+  box-shadow: 0 6px 16px rgba(74,63,54,.1);
   background: var(--cream);
   object-fit: cover;
 }
 .pay-note {
   text-align: center;
-  margin-top: 16px;
+  margin-top: 12px;
   font-weight: 300;
   color: var(--sage-d);
 }
 @media (min-width: 700px) {
-  .pay-cards { gap: 32px; }
-  .pay-cards img { max-width: 280px; }
+  .pay-cards { gap: 24px; }
+  .pay-cards img { max-width: 220px; }
 }
-.chips.sub{margin-top:-2px}.chips.sub .chip{padding:5px 14px;font-size:.88rem;border-color:var(--line)}.chips.sub .chip[aria-pressed=true]{background:var(--blush);border-color:var(--blush);color:var(--ink)}
-
-.card .pic{position:relative}.badge{position:absolute;top:8px;right:8px;padding:3px 10px;border-radius:999px;background:var(--blush);color:var(--ink);font-size:.8rem;font-weight:500;box-shadow:0 1px 4px rgba(74,63,54,.25)}
-.pr{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 10px;margin-top:2px}.pr s{font-size:.82rem;font-weight:300;opacity:.75}.pr .price{margin:0;font-size:1.05rem}.sheet .pr{margin:0 0 14px}.sheet .pr .price{font-size:1.3rem}.off{padding:2px 9px;border-radius:999px;background:var(--blush);font-size:.8rem;font-weight:500}
