@@ -59,8 +59,8 @@ function render() {
   const list = prods.filter(p => p.available !== false && (catId === 'all' || ids.includes(p.category_id)) && p.name.toLowerCase().includes(q));
   $('#grid').innerHTML = list.map(p => `<button class="card" data-id="${esc(p.id)}"><div class="pic">${pic(p)}${hasPromo(p) ? `<span class="badge">-${off(p)}%</span>` : ''}</div><div class="meta"><h3>${esc(p.name)}</h3>${priceHtml(p)}</div></button>`).join('');
   $('#empty').hidden = list.length > 0;
-  $('#payText').innerHTML = paras(cfg.payments || DEFAULTS.pay);
-  $('#aboutText').innerHTML = paras(cfg.about || DEFAULTS.about);
+  const payTextEl = $('#payText'); if (payTextEl) payTextEl.innerHTML = paras(cfg.payments || DEFAULTS.pay);
+  const aboutTextEl = $('#aboutText'); if (aboutTextEl) aboutTextEl.innerHTML = paras(cfg.about || DEFAULTS.about);
 }
 
 $('#chips').insertAdjacentHTML('afterend', '<div class="chips sub" id="subchips" hidden></div>');
