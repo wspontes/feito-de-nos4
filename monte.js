@@ -13,7 +13,7 @@ const MUG = {
 const MAX_FILE = 8 * 1024 * 1024;         // acima disso a original é reduzida antes de enviar
 /* ===================================================================== */
 
-const st = {img: null, file: null, x: .5, y: .5, sw: 1, rot: 0, turn: FRONT_U};
+const st = {img: null, file: null, x: .5, y: .5, sw: 1, rot: 0, turn: 0};
 const EW = 1200, EH = Math.round(EW * AREA_H_CM / AREA_W_CM);
 const edit = $('#edit'), ectx = edit.getContext('2d'); edit.width = EW; edit.height = EH;
 const mock = $('#mock'), mctx = mock.getContext('2d');
@@ -48,7 +48,9 @@ function drawMock() {
   mctx.save(); mctx.globalCompositeOperation = 'multiply';
   for (let x = cx - rx; x < cx + rx; x++) {
     const t = (x + .5 - cx) / rx, th = Math.asin(clamp(t, -1, 1)), s = Math.sqrt(1 - t * t);
-    const u = ((st.turn + th / (2 * Math.PI)) % 1 + 1) % 1;
+    // gira a caneca inteira: a arte fica fixa na superfície, st.turn controla qual lado fica de frente
+    const eff = th - st.turn * 2 * Math.PI;
+    const u = ((eff + Math.PI) / (2 * Math.PI) + 1) % 1;
     const du = Math.abs(Math.asin(clamp((x + 1.5 - cx) / rx, -1, 1)) - th) / (2 * Math.PI);
     mctx.drawImage(flat, u * flat.width, 0, Math.max(1, du * flat.width), flat.height, x, topY + ry * s, 1.5, bottomY - topY);
   }
@@ -78,7 +80,7 @@ const fit = () => { setSw(Math.min(1, ratio())); st.x = st.y = .5; };
 
 $('#size').oninput = e => { setSw(.05 * Math.pow(60, e.target.value / 100)); renderAll(); };
 $('#rot').oninput = e => { st.rot = +e.target.value; renderAll(); };
-$('#turn').oninput = e => { st.turn = (FRONT_U + (e.target.value - 50) / 100 + 1) % 1; drawMock(); };
+$('#turn').oninput = e => { st.turn = (e.target.value - 50) / 100; drawMock(); };
 $('#fit').onclick = () => { fit(); renderAll(); };
 $('#fill').onclick = () => { setSw(Math.max(1, ratio())); st.x = st.y = .5; renderAll(); };
 $('#center').onclick = () => { st.x = st.y = .5; renderAll(); };
@@ -105,7 +107,7 @@ $('#file').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
   if (!/^image\/(jpeg|png|webp|gif)$/.test(f.type)) return toast('Use uma imagem JPG, PNG ou WebP.');
   const img = new Image();
-  img.onload = () => { st.img = img; st.file = f; st.rot = 0; st.turn = FRONT_U; $('#turn').value = 50; fit(); $('#drop').hidden = true; $('#work').hidden = false; renderAll(); };
+  img.onload = () => { st.img = img; st.file = f; st.rot = 0; st.turn = 0; $('#turn').value = 50; fit(); $('#drop').hidden = true; $('#work').hidden = false; renderAll(); };
   img.onerror = () => toast('Não consegui abrir essa imagem. Tente outra.');
   img.src = URL.createObjectURL(f); e.target.value = '';
 };
