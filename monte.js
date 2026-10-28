@@ -6,7 +6,7 @@ const $ = s => document.querySelector(s);
 const AREA_W_CM = 20, AREA_H_CM = 9.5;   // área de impressão da caneca de 325 ml
 const FRONT_U = 0.5;                      // ponto da arte (0 a 1) que fica no centro da frente da caneca
 const MUG = {
-  image: 'assets/caneca-branca.png',      // foto/arte da caneca branca de frente (troque o arquivo ou o nome)
+  image: 'assets/caneca-3visoes.png',      // foto/arte da caneca branca de frente (troque o arquivo ou o nome)
   cx: 430, rx: 250,                       // centro e meia-largura do corpo da caneca (em px da imagem)
   topY: 120, bottomY: 700, ry: 36         // altura da borda de cima, da base e a curvatura (em px da imagem)
 };
