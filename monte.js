@@ -8,8 +8,8 @@ const MAX_FILE = 8 * 1024 * 1024;         // acima disso a original é reduzida 
 
 const MUG_3 = {
   image: 'assets/caneca-3visoes.png',     // imagem com 3 canecas lado a lado
-  width: 1500,                            // largura da imagem (ajuste se necessário)
-  height: 1000                            // altura da imagem (ajuste se necessário)
+  width: 1500,                            // largura real da sua imagem
+  height: 1000                            // altura real da sua imagem
 };
 /* =================== */
 
@@ -55,23 +55,19 @@ function drawViews() {
   
   if (!st.img) return;
   
-  // Divide a imagem em 3 colunas iguais e desenha a arte em cada uma
-  const colW = viewsCanvas.width / 3;
-  const marginX = colW * 0.10;   // margem lateral dentro de cada coluna
-  const marginY = viewsCanvas.height * 0.12; // margem superior/inferior
+  const colW = viewsCanvas.width / 3;      // largura de cada coluna (1/3 da imagem)
+  const artW = colW * 0.65;                // largura da arte = 65% da coluna
+  const artH = artW * (EH / EW);           // altura mantendo proporção da flatCanvas
+  const artY = viewsCanvas.height * 0.18;  // 18% do topo (ajuste se precisar subir/descer)
   
   vctx.save();
   vctx.globalCompositeOperation = 'multiply';
   
   for (let i = 0; i < 3; i++) {
-    const cx = i * colW + colW / 2;
-    const drawW = colW - marginX * 2;
-    const drawH = drawW * (EH / EW); // mantém proporção da arte
-    
-    const dx = cx - drawW / 2;
-    const dy = marginY;
-    
-    vctx.drawImage(flatCanvas, dx, dy, drawW, drawH);
+    const cx = i * colW + colW / 2;   // centro de cada coluna
+    const dx = cx - artW / 2;         // centraliza horizontalmente
+    const dy = artY;                  // mesma altura nas 3
+    vctx.drawImage(flatCanvas, dx, dy, artW, artH);
   }
   
   vctx.globalCompositeOperation = 'source-over';
@@ -84,7 +80,6 @@ function renderAll() {
   drawViews();
   quality();
 
-  // Atualiza o canvas de prévia no HTML
   const mock = $('#mock');
   if (mock) {
     const mctx = mock.getContext('2d');
