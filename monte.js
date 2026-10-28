@@ -2,23 +2,16 @@ const C = window.CONFIG || {};
 const sb = (C.SUPABASE_URL && window.supabase) ? supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY) : null;
 const $ = s => document.querySelector(s);
 
-/* ===== AJUSTES — edite aqui com as medidas da sua imagem de 3 canecas ===== */
+/* ===== AJUSTES ===== */
 const AREA_W_CM = 20, AREA_H_CM = 9.5;   // área de impressão da caneca de 325 ml
 const MAX_FILE = 8 * 1024 * 1024;         // acima disso a original é reduzida antes de enviar
 
 const MUG_3 = {
-  image: 'assets/caneca-3visoes.png',     // <-- envie essa imagem para assets/
-  // Largura e altura da imagem de 3 canecas (ajuste conforme o arquivo real)
-  width: 1500,
-  height: 1000,
-  // Cada visão: superfície onde a arte será estampada (x, y, w, h da região imprimível)
-  views: [
-    { name: 'Frente esquerda', x: 80, y: 180, w: 260, h: 430 },   // caneca da esquerda
-    { name: 'Frente centro',   x: 560, y: 150, w: 300, h: 480 },  // caneca do centro
-    { name: 'Frente direita',  x: 1040, y: 180, w: 260, h: 430 }  // caneca da direita
-  ]
+  image: 'assets/caneca-3visoes.png',     // imagem com 3 canecas lado a lado
+  width: 1500,                            // largura da imagem (ajuste se necessário)
+  height: 1000                            // altura da imagem (ajuste se necessário)
 };
-/* ===================================================================== */
+/* =================== */
 
 const st = {img: null, file: null, x: .5, y: .5, sw: 1, rot: 0};
 const EW = 1200, EH = Math.round(EW * AREA_H_CM / AREA_W_CM);
@@ -28,6 +21,10 @@ viewsCanvas.width = MUG_3.width; viewsCanvas.height = MUG_3.height;
 const vctx = viewsCanvas.getContext('2d');
 
 const mugImg = new Image(); mugImg.src = MUG_3.image;
+
+const flatCanvas = document.createElement('canvas');
+flatCanvas.width = EW; flatCanvas.height = EH;
+const fctx = flatCanvas.getContext('2d');
 
 const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 3500); };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -52,29 +49,34 @@ function drawArt(ctx, W, H, guides) {
 function drawViews() {
   vctx.clearRect(0, 0, viewsCanvas.width, viewsCanvas.height);
   if (!mugImg.complete || !mugImg.naturalWidth) return;
+  
+  // Desenha a imagem de fundo (3 canecas)
   vctx.drawImage(mugImg, 0, 0, viewsCanvas.width, viewsCanvas.height);
-
+  
   if (!st.img) return;
-
+  
+  // Divide a imagem em 3 colunas iguais e desenha a arte em cada uma
+  const colW = viewsCanvas.width / 3;
+  const marginX = colW * 0.10;   // margem lateral dentro de cada coluna
+  const marginY = viewsCanvas.height * 0.12; // margem superior/inferior
+  
   vctx.save();
   vctx.globalCompositeOperation = 'multiply';
-  MUG_3.views.forEach(v => {
-    // Desenha a arte ajustada (flat) sobre a superfície da caneca
-    // Ajuste simples: escala para cobrir a superfície e centraliza
-    const scale = Math.max(v.w / EW, v.h / EH);
-    const drawW = EW * scale;
-    const drawH = EH * scale;
-    const dx = v.x + (v.w - drawW) / 2;
-    const dy = v.y + (v.h - drawH) / 2;
+  
+  for (let i = 0; i < 3; i++) {
+    const cx = i * colW + colW / 2;
+    const drawW = colW - marginX * 2;
+    const drawH = drawW * (EH / EW); // mantém proporção da arte
+    
+    const dx = cx - drawW / 2;
+    const dy = marginY;
+    
     vctx.drawImage(flatCanvas, dx, dy, drawW, drawH);
-  });
+  }
+  
   vctx.globalCompositeOperation = 'source-over';
   vctx.restore();
 }
-
-const flatCanvas = document.createElement('canvas');
-flatCanvas.width = EW; flatCanvas.height = EH;
-const fctx = flatCanvas.getContext('2d');
 
 function renderAll() {
   drawArt(ectx, EW, EH, true);
@@ -82,11 +84,12 @@ function renderAll() {
   drawViews();
   quality();
 
-  // Atualiza a prévia das 3 canecas no HTML (canvas ou imagem gerada)
+  // Atualiza o canvas de prévia no HTML
   const mock = $('#mock');
   if (mock) {
-    mock.getContext('2d').clearRect(0, 0, mock.width, mock.height);
-    mock.getContext('2d').drawImage(viewsCanvas, 0, 0, mock.width, mock.height);
+    const mctx = mock.getContext('2d');
+    mctx.clearRect(0, 0, mock.width, mock.height);
+    mctx.drawImage(viewsCanvas, 0, 0, mock.width, mock.height);
   }
 
   $('#size').value = Math.log(st.sw / .05) / Math.log(60) * 100; $('#rot').value = st.rot;
