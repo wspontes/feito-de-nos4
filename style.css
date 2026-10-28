@@ -88,14 +88,14 @@ footer{display:flex;flex-direction:column;align-items:center;gap:2px;padding:26p
 
 .pay-cards {
   display: flex;
-  flex-wrap: wrap;
   gap: 12px;
   justify-content: center;
   margin: 18px 0;
+  flex-wrap: nowrap;
 }
 .pay-cards img {
-  width: 100%;
-  max-width: 180px;      /* 180 × 3 + gaps = ~576px, cabe dentro dos 640px do .info */
+  max-width: 170px;
+  height: auto;
   border-radius: 50%;
   border: 4px solid var(--paper);
   box-shadow: 0 6px 16px rgba(74,63,54,.1);
@@ -109,7 +109,6 @@ footer{display:flex;flex-direction:column;align-items:center;gap:2px;padding:26p
   font-weight: 300;
   color: var(--sage-d);
 }
-@media (min-width: 700px) {
-  .pay-cards { gap: 16px; }
-  .pay-cards img { max-width: 190px; }
+@media (max-width: 640px) {
+  .pay-cards { flex-wrap: wrap; justify-content: center; }
 }
