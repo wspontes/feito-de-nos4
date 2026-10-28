@@ -5,10 +5,12 @@ const $ = s => document.querySelector(s);
 /* ===== AJUSTES — edite aqui quando tiver a foto da caneca branca ===== */
 const AREA_W_CM = 20, AREA_H_CM = 9.5;   // área de impressão da caneca de 325 ml
 const FRONT_U = 0.5;                      // ponto da arte (0 a 1) que fica no centro da frente da caneca
-const MUG = {
-  image: 'assets/caneca-branca.png',      // foto/arte da caneca branca de frente (troque o arquivo ou o nome)
-  cx: 430, rx: 250,                       // centro e meia-largura do corpo da caneca (em px da imagem)
-  topY: 120, bottomY: 700, ry: 36         // altura da borda de cima, da base e a curvatura (em px da imagem)
+const MOCK = {                           // imagem das 3 canecas brancas e os mapas de onde a arte aparece
+  base: 'assets/canecas-brancas.jpg',     // foto das canecas brancas (esquerda, meio, direita)
+  uv: 'assets/canecas-uv.png',            // mapa de posição da arte (gerado para esta foto)
+  mask: 'assets/canecas-mask.png',        // máscara do corpo das canecas (sem a alça)
+  centers: [.25, .5, .75],                // parte da arte que fica no centro de cada caneca (0 a 1)
+  splits: [600, 920]                      // x onde termina a caneca da esquerda e a do meio (px da foto)
 };
 const MAX_FILE = 8 * 1024 * 1024;         // acima disso a original é reduzida antes de enviar
 /* ===================================================================== */
@@ -17,8 +19,7 @@ const st = {img: null, file: null, x: .5, y: .5, sw: 1, rot: 0, turn: FRONT_U};
 const EW = 1200, EH = Math.round(EW * AREA_H_CM / AREA_W_CM);
 const edit = $('#edit'), ectx = edit.getContext('2d'); edit.width = EW; edit.height = EH;
 const mock = $('#mock'), mctx = mock.getContext('2d');
-const flat = document.createElement('canvas'); flat.width = 1600; flat.height = Math.round(1600 * AREA_H_CM / AREA_W_CM);
-const mugImg = new Image(); mugImg.onload = () => st.img && drawMock(); mugImg.src = MUG.image;
+const flat = document.createElement('canvas'); flat.width = 1200; flat.height = Math.round(1200 * AREA_H_CM / AREA_W_CM);
 
 const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 3500); };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -40,26 +41,51 @@ function drawArt(ctx, W, H, guides) {
   ctx.fillText('FRENTE', (a + b) / 2, 42); ctx.fillText('VOLTA', a / 2, 42); ctx.fillText('VOLTA', (b + W) / 2, 42);
 }
 
+const drawFlat = () => drawArt(flat.getContext('2d'), flat.width, flat.height, false);
+let MP = null, mockT = 0;
+const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+Promise.all([MOCK.base, MOCK.uv, MOCK.mask].map(loadImg)).then(([b, uv, mk]) => {
+  const w = b.naturalWidth, h = b.naturalHeight, cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d', {willReadFrequently: true});
+  const read = im => { g.clearRect(0, 0, w, h); g.drawImage(im, 0, 0); return g.getImageData(0, 0, w, h).data; };
+  const U = read(uv), K = read(mk), Bd = read(b), list = [];
+  for (let p = 0; p < w * h; p++) if (K[p * 4]) list.push(p);
+  const N = list.length, idx = Int32Array.from(list), du = new Float32Array(N), vv = new Float32Array(N), mm = new Float32Array(N), sh = new Float32Array(N);
+  for (let k = 0; k < N; k++) {
+    const p = idx[k], x = p % w, th = ((U[p * 4] * 256 + U[p * 4 + 1]) / 65535 - .5) * Math.PI;
+    du[k] = MOCK.centers[x < MOCK.splits[0] ? 0 : x < MOCK.splits[1] ? 1 : 2] + th / (2 * Math.PI);
+    vv[k] = U[p * 4 + 2] / 254; mm[k] = K[p * 4] / 255; sh[k] = 1 - .26 * Math.pow(Math.abs(Math.sin(th)), 2.6);
+  }
+  mock.width = w; mock.height = h; mctx.putImageData(new ImageData(Bd, w, h), 0, 0);
+  MP = {idx, du, vv, mm, sh, base: Bd, out: mctx.createImageData(w, h)};
+  if (st.img) queueMock();
+}).catch(() => toast('Não consegui carregar a imagem das canecas.'));
+
+function queueMock() { if (!mockT) mockT = setTimeout(() => { mockT = 0; drawFlat(); drawMock(); }, 60); }
+
 function drawMock() {
-  mctx.clearRect(0, 0, mock.width, mock.height);
-  if (mugImg.complete && mugImg.naturalWidth) mctx.drawImage(mugImg, 0, 0, mock.width, mock.height);
-  if (!st.img) return;
-  const {cx, rx, topY, bottomY, ry} = MUG;
-  mctx.save(); mctx.globalCompositeOperation = 'multiply';
-  for (let x = cx - rx; x < cx + rx; x++) {
-    const t = (x + .5 - cx) / rx, th = Math.asin(clamp(t, -1, 1)), s = Math.sqrt(1 - t * t);
-    const u = ((st.turn + th / (2 * Math.PI)) % 1 + 1) % 1;
-    const du = Math.abs(Math.asin(clamp((x + 1.5 - cx) / rx, -1, 1)) - th) / (2 * Math.PI);
-    mctx.drawImage(flat, u * flat.width, 0, Math.max(1, du * flat.width), flat.height, x, topY + ry * s, 1.5, bottomY - topY);
+  if (!MP || !st.img) return;
+  const {idx, du, vv, mm, sh, base, out} = MP, o = out.data, fw = flat.width, fh = flat.height;
+  o.set(base);
+  const f = flat.getContext('2d').getImageData(0, 0, fw, fh).data;
+  for (let k = 0; k < idx.length; k++) {
+    const u = du[k] - Math.floor(du[k]), fx = u * fw, fy = vv[k] * (fh - 1), ix = Math.floor(fx), y0 = Math.floor(fy);
+    const x0 = ix % fw, x1 = (ix + 1) % fw, y1 = Math.min(fh - 1, y0 + 1), tx = fx - ix, ty = fy - y0;
+    const a = (y0 * fw + x0) * 4, b = (y0 * fw + x1) * 4, c = (y1 * fw + x0) * 4, d = (y1 * fw + x1) * 4;
+    const w0 = (1 - tx) * (1 - ty), w1 = tx * (1 - ty), w2 = (1 - tx) * ty, w3 = tx * ty, p = idx[k] * 4, m = mm[k], s = sh[k];
+    for (let ch = 0; ch < 3; ch++) {
+      const art = f[a + ch] * w0 + f[b + ch] * w1 + f[c + ch] * w2 + f[d + ch] * w3;
+      o[p + ch] = base[p + ch] * (1 - m) + base[p + ch] * art / 255 * s * m;
+    }
   }
-  mctx.globalCompositeOperation = 'source-over';
-  for (let x = cx - rx; x < cx + rx; x++) {
-    const t = (x + .5 - cx) / rx, s = Math.sqrt(1 - t * t), y = topY + ry * s;
-    mctx.fillStyle = `rgba(0,0,0,${.34 * Math.pow(Math.abs(t), 2.6)})`; mctx.fillRect(x, y, 1.5, bottomY - topY);
-    mctx.fillStyle = `rgba(255,255,255,${.16 * Math.exp(-Math.pow((t + .38) / .12, 2))})`; mctx.fillRect(x, y, 1.5, bottomY - topY);
-  }
-  mctx.restore();
+  mctx.putImageData(out, 0, 0);
 }
+
+mock.onclick = () => {
+  if (!st.img) return;
+  const d = document.createElement('div'); d.className = 'lb';
+  d.innerHTML = `<img alt="Prévia ampliada" src="${mock.toDataURL('image/jpeg', .92)}">`; d.onclick = () => d.remove(); document.body.append(d);
+};
 
 function quality() {
   if (!st.img) return;
@@ -69,7 +95,7 @@ function quality() {
   $('#qual').className = 'qual ' + c; $('#qual').textContent = t;
 }
 function renderAll() {
-  drawArt(ectx, EW, EH, true); drawArt(flat.getContext('2d'), flat.width, flat.height, false); drawMock(); quality();
+  drawArt(ectx, EW, EH, true); quality(); queueMock();
   $('#size').value = Math.log(st.sw / .05) / Math.log(60) * 100; $('#rot').value = st.rot;
 }
 const setSw = v => { st.sw = clamp(v, .05, 3); };
@@ -78,7 +104,6 @@ const fit = () => { setSw(Math.min(1, ratio())); st.x = st.y = .5; };
 
 $('#size').oninput = e => { setSw(.05 * Math.pow(60, e.target.value / 100)); renderAll(); };
 $('#rot').oninput = e => { st.rot = +e.target.value; renderAll(); };
-$('#turn').oninput = e => { st.turn = (FRONT_U + (e.target.value - 50) / 100 + 1) % 1; drawMock(); };
 $('#fit').onclick = () => { fit(); renderAll(); };
 $('#fill').onclick = () => { setSw(Math.max(1, ratio())); st.x = st.y = .5; renderAll(); };
 $('#center').onclick = () => { st.x = st.y = .5; renderAll(); };
@@ -105,7 +130,7 @@ $('#file').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
   if (!/^image\/(jpeg|png|webp|gif)$/.test(f.type)) return toast('Use uma imagem JPG, PNG ou WebP.');
   const img = new Image();
-  img.onload = () => { st.img = img; st.file = f; st.rot = 0; st.turn = FRONT_U; $('#turn').value = 50; fit(); $('#drop').hidden = true; $('#work').hidden = false; renderAll(); };
+  img.onload = () => { st.img = img; st.file = f; st.rot = 0; fit(); $('#drop').hidden = true; $('#work').hidden = false; renderAll(); };
   img.onerror = () => toast('Não consegui abrir essa imagem. Tente outra.');
   img.src = URL.createObjectURL(f); e.target.value = '';
 };
