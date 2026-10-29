@@ -5,7 +5,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const brl = n => (n == null || n === '') ? 'Consulte o valor' : Number(n).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
 const hasPromo = p => p.price != null && p.old_price != null && Number(p.old_price) > Number(p.price);
 const off = p => Math.round((1 - p.price / p.old_price) * 100);
-const priceHtml = (p, withOff) => `<div class="pr">${hasPromo(p) ? `<s>${brl(p.old_price)}</s>` : ''}<span class="price">${brl(p.price)}</span>${withOff && hasPromo(p) ? `<small class="off">-${off(p)}%</small>` : ''}</div>`;
+const priceHtml = (p, withOff) => `<div class="pr">${hasPromo(p) ? `${brl(p.old_price)}
 const LEAF = '<svg viewBox="0 0 120 200" fill="currentColor"><path d="M62 150c-22-4-34-20-36-38 22 2 34 16 36 38zM64 120c20-6 30-22 30-40-20 4-30 20-30 40zM66 90c-20-6-28-22-28-38 20 4 28 18 28 38z"/></svg>';
 const WA = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20l1.3-4.2A8 8 0 1 1 8.4 18.8z"/></svg>';
 const DEFAULTS = {
