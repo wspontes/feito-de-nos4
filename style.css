@@ -112,3 +112,48 @@ footer{display:flex;flex-direction:column;align-items:center;gap:2px;padding:26p
 @media (max-width: 640px) {
   .pay-cards { flex-wrap: wrap; justify-content: center; }
 }
+
+/* ===== BANNER CAROUSEL ===== */
+.banner-carousel {
+  position: relative;
+  width: 100%;
+  height: clamp(180px, 35vw, 340px);
+  border-radius: 16px;
+  overflow: hidden;
+  margin: 18px 0;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+.banner-slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--blush);
+  opacity: 0;
+  transition: opacity .6s ease;
+  cursor: pointer;
+}
+.banner-slide.active { opacity: 1; }
+.banner-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: none;
+  background: var(--line);
+  cursor: pointer;
+  padding: 0;
+}
+.dot.active { background: var(--sage-d); }
+
+@media (max-width: 640px) {
+  .banner-carousel { height: clamp(140px, 40vw, 220px); }
+}
