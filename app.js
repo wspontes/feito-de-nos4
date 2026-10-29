@@ -12,7 +12,8 @@ const DEFAULTS = {
   pay: 'As formas de pagamento são combinadas pelo WhatsApp na hora do pedido.',
   about: 'Uma caneca. Um nome. Uma história.\nPresentes personalizados feitos com carinho, para acompanhar rotinas, afetos e memórias.\nEncomendas via WhatsApp.'
 };
-let cats = [], prods = [], cfg = {}, catId = 'all', subId = 'all', query = '';
+let cats = [], prods = [], cfg = {}, banners = [], catId = 'all', subId = 'all', query = '';
+let editingBannerId = null;
 
 const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 3200); };
 const paras = t => String(t).split('\n').filter(Boolean).map(l => `<p>${esc(l)}</p>`).join('');
@@ -33,14 +34,18 @@ async function load() {
     prods = [['Caneca Aqui tem amor', 'c0', 45], ['Caneca com nome', 'c0', 39.9], ['Quadro Família', 'c1', 79], ['Quadro Botânico', 'c1', 65], ['Azulejo Lar', 'c2', 32], ['Azulejo com data', 'c2', null]]
       .map(([name, category_id, price], i) => ({id: 'p' + i, name, category_id, price, description: 'Exemplo de produto. Configure o Supabase para ver os seus.', available: true}));
     prods[0] = {...prods[0], name: 'Caneca Angry Birds', price: 45, description: 'Caneca personalizada com o tema Angry Birds.', image_url: 'assets/demo-angry-birds.jpg'};
+    banners = [];
   } else {
-    const [c, p, s] = await Promise.all([
+    const [c, p, s, b] = await Promise.all([
       sb.from('categories').select('*').order('position').order('created_at'),
       prodQ(),
-      sb.from('settings').select('*')]);
+      sb.from('settings').select('*'),
+      sb.from('banners').select('*').order('position').order('created_at')
+    ]);
     if (c.error || p.error) toast('Não foi possível carregar os produtos.');
     cats = c.data || []; prods = p.data || [];
     cfg = Object.fromEntries((s.data || []).map(r => [r.key, r.value]));
+    banners = (b.data || []).filter(x => x.active !== false);
   }
   render();
 }
@@ -59,6 +64,25 @@ function render() {
   const list = prods.filter(p => p.available !== false && (catId === 'all' || ids.includes(p.category_id)) && p.name.toLowerCase().includes(q));
   $('#grid').innerHTML = list.map(p => `<button class="card" data-id="${esc(p.id)}"><div class="pic">${pic(p)}${hasPromo(p) ? `<span class="badge">-${off(p)}%</span>` : ''}</div><div class="meta"><h3>${esc(p.name)}</h3>${priceHtml(p)}</div></button>`).join('');
   $('#empty').hidden = list.length > 0;
+
+  // Banners carousel
+  const bc = $('#bannerCarousel');
+  if (bc) {
+    if (banners.length) {
+      bc.innerHTML = banners.map((b, i) => {
+        const prod = prods.find(p => p.id === b.link_product_id);
+        return `<div class="banner-slide${i === 0 ? ' active' : ''}" data-banner="${esc(b.id)}"${prod ? ` data-product="${esc(prod.id)}"` : ''} style="background-image:url('${esc(b.image_url)}')"></div>`;
+      }).join('');
+      const dotsHtml = banners.map((_, i) => `<button class="dot${i === 0 ? ' active' : ''}" data-slide="${i}"></button>`).join('');
+      const existing = $('#bannerDots');
+      if (existing) existing.innerHTML = dotsHtml;
+      else bc.insertAdjacentHTML('afterend', `<div class="banner-dots" id="bannerDots">${dotsHtml}</div>`);
+    } else {
+      bc.innerHTML = '';
+      const dots = $('#bannerDots'); if (dots) dots.remove();
+    }
+  }
+
   const payTextEl = $('#payText'); if (payTextEl) payTextEl.innerHTML = paras(cfg.payments || DEFAULTS.pay);
   const aboutTextEl = $('#aboutText'); if (aboutTextEl) aboutTextEl.innerHTML = paras(cfg.about || DEFAULTS.about);
 }
@@ -114,7 +138,7 @@ const closeAdmin = () => { adm().hidden = true; document.body.style.overflow = '
 
 function adminPanel(tab, editing) {
   adm().hidden = false; document.body.style.overflow = 'hidden';
-  const tabs = [['produtos', 'Produtos'], ['categorias', 'Categorias'], ['pedidos', 'Pedidos'], ['textos', 'Textos']]
+  const tabs = [['produtos', 'Produtos'], ['categorias', 'Categorias'], ['pedidos', 'Pedidos'], ['textos', 'Textos'], ['banners', 'Banners']]
     .map(([k, n]) => `<button class="chip" data-tab="${k}" aria-pressed="${k === tab}">${n}</button>`).join('');
   let body = '';
   if (tab === 'produtos') {
@@ -136,9 +160,24 @@ function adminPanel(tab, editing) {
   } else if (tab === 'categorias') {
     body = `<form id="cf"><label>Nome<input name="name" required></label><label>Dentro de<select name="parent_id"><option value="">Nenhuma (categoria principal)</option>${cats.filter(c => !c.parent_id).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label><button class="btn">Adicionar</button></form>
       ${catTree().map(c => `<div class="row"${c.parent_id ? ' style="padding-left:20px"' : ''}><div class="t"><b>${c.parent_id ? '↳ ' : ''}${esc(c.name)}</b></div><button class="btn alt sm" data-ren="${esc(c.id)}">Renomear</button><button class="btn alt sm" data-delc="${esc(c.id)}">Excluir</button></div>`).join('')}`;
-  } else {
+  } else if (tab === 'textos') {
     body = `<form id="tf"><label>Formas de pagamento (uma linha por parágrafo)<textarea name="payments" rows="5">${esc(cfg.payments || DEFAULTS.pay)}</textarea></label>
       <label>Sobre (uma linha por parágrafo)<textarea name="about" rows="6">${esc(cfg.about || DEFAULTS.about)}</textarea></label><button class="btn">Salvar textos</button></form>`;
+  } else if (tab === 'banners') {
+    body = `<form id="bf"><label>Imagem do banner<input name="image" type="file" accept="image/*" ${!editing ? 'required' : ''}></label>
+      <label>Título (opcional)<input name="title" value="${esc(editing?.title || '')}"></label>
+      <label>Vincular a produto<select name="link_product_id"><option value="">Nenhum (apenas imagem)</option>${prods.map(p => `<option value="${esc(p.id)}" ${editing?.link_product_id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+      <label class="chk"><input name="active" type="checkbox" ${editing?.active === false ? '' : 'checked'}> Ativo</label>
+      <label>Ordem<input name="position" type="number" min="0" value="${esc(editing?.position || 0)}"></label>
+      <button class="btn">${editing ? 'Salvar banner' : 'Adicionar banner'}</button>
+      ${editing ? '<button class="btn alt" type="button" data-tab="banners">Cancelar</button>' : ''}</form>
+      ${banners.map((b, i) => {
+        const prod = prods.find(p => p.id === b.link_product_id);
+        return `<div class="row"><div class="t"><b>${esc(b.title || 'Sem título')}</b><small>${prod ? '→ ' + esc(prod.name) : 'sem link'}</small></div>
+        <img src="${esc(b.image_url)}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;">
+        <button class="btn alt sm" data-editb="${esc(b.id)}">Editar</button>
+        <button class="btn alt sm" data-delb="${esc(b.id)}">Excluir</button></div>`;
+      }).join('')}`;
   }
   adm().innerHTML = `<div class="adm"><h2>Painel da loja</h2><div class="bar">${tabs}<button class="btn alt sm" data-close style="margin-left:auto">Fechar</button><button class="btn alt sm" data-out>Sair</button></div>${body}</div>`;
   bindAdmin(tab);
@@ -156,6 +195,12 @@ async function compress(file) {
 }
 async function upload(file) {
   const blob = await compress(file), path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webp`;
+  const {error} = await sb.storage.from('produtos').upload(path, blob, {contentType: 'image/webp'});
+  if (error) throw error;
+  return sb.storage.from('produtos').getPublicUrl(path).data.publicUrl;
+}
+async function uploadBanner(file) {
+  const blob = await compress(file), path = `banners/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webp`;
   const {error} = await sb.storage.from('produtos').upload(path, blob, {contentType: 'image/webp'});
   if (error) throw error;
   return sb.storage.from('produtos').getPublicUrl(path).data.publicUrl;
@@ -203,9 +248,11 @@ function bindAdmin(tab) {
       else if (d.delc && kidsOf(d.delc).length) toast('Exclua primeiro as subcategorias desta categoria.');
       else if (d.delc && confirm('Excluir categoria? Os produtos dela ficam sem categoria.')) { const r = await sb.from('categories').delete().eq('id', d.delc); if (r.error) throw r.error; refresh('categorias', 'Categoria excluída.'); }
       else if (d.ren) { const n = prompt('Novo nome da categoria:', catName(d.ren)); if (n && n.trim()) { const r = await sb.from('categories').update({name: n.trim()}).eq('id', d.ren); if (r.error) throw r.error; refresh('categorias', 'Categoria renomeada.'); } }
+      else if (d.editb) { editingBannerId = d.editb; adminPanel('banners', banners.find(b => b.id === d.editb)); a.scrollTo(0, 0); }
+      else if (d.delb && confirm('Excluir este banner?')) { const r = await sb.from('banners').delete().eq('id', d.delb); if (r.error) throw r.error; refresh('banners', 'Banner excluído.'); }
     } catch (err) { fail(err); }
   };
-  const pf = $('#pf'), cf = $('#cf'), tf = $('#tf');
+  const pf = $('#pf'), cf = $('#cf'), tf = $('#tf'), bf = $('#bf');
   if (pf) pf.onsubmit = async e => {
     e.preventDefault(); const f = e.target, btn = f.querySelector('.btn'); btn.disabled = true; btn.textContent = 'Salvando…';
     try {
@@ -228,10 +275,58 @@ function bindAdmin(tab) {
     const r = await sb.from('settings').upsert([{key: 'payments', value: e.target.payments.value}, {key: 'about', value: e.target.about.value}]);
     r.error ? fail(r.error) : refresh('textos', 'Textos salvos.');
   };
+  if (bf) bf.onsubmit = async e => {
+    e.preventDefault(); const f = e.target, btn = f.querySelector('.btn'); btn.disabled = true; btn.textContent = 'Salvando…';
+    try {
+      const row = {title: f.title.value.trim() || null, link_product_id: f.link_product_id.value || null, active: f.active.checked, position: Number(f.position.value) || 0};
+      if (f.image.files[0]) row.image_url = await uploadBanner(f.image.files[0]);
+      if (!editingBannerId) {
+        const r = await sb.from('banners').insert({...row, position: banners.length + 1});
+        if (r.error) throw r.error;
+      } else {
+        const r = await sb.from('banners').update(row).eq('id', editingBannerId);
+        if (r.error) throw r.error;
+      }
+      editingBannerId = null;
+      refresh('banners', 'Banner salvo.');
+    } catch (err) { fail(err); btn.disabled = false; btn.textContent = 'Tentar de novo'; }
+  };
 }
+
+/* ---------- Carousel ---------- */
+let bannerIdx = 0, bannerTimer;
+function showBanner(i) {
+  bannerIdx = (i + banners.length) % banners.length;
+  document.querySelectorAll('.banner-slide').forEach((s, idx) => s.classList.toggle('active', idx === bannerIdx));
+  document.querySelectorAll('.dot').forEach((d, idx) => d.classList.toggle('active', idx === bannerIdx));
+}
+function startBannerTimer() {
+  if (bannerTimer) clearInterval(bannerTimer);
+  bannerTimer = setInterval(() => showBanner(bannerIdx + 1), 5000);
+}
+function stopBannerTimer() { if (bannerTimer) clearInterval(bannerTimer); }
+
+document.body.addEventListener('click', e => {
+  const slide = e.target.closest('.banner-slide');
+  if (slide) {
+    const pid = slide.dataset.product;
+    if (pid) {
+      const p = prods.find(x => x.id === pid);
+      if (p) openProduct(p);
+    }
+  }
+  const dot = e.target.closest('.dot');
+  if (dot) {
+    showBanner(Number(dot.dataset.slide));
+    stopBannerTimer();
+    startBannerTimer();
+  }
+});
 
 const hp = document.querySelector('.hero p');
 if (hp) hp.insertAdjacentHTML('afterend', '<a class="btn" href="monte.html" style="display:inline-flex;width:auto;padding:12px 28px;margin-top:20px">Monte a sua caneca</a>');
 const ft = document.querySelector('footer');
 if (ft) ft.insertAdjacentHTML('afterbegin', '<a href="monte.html">Monte a sua caneca</a>');
+
 load();
+startBannerTimer();
