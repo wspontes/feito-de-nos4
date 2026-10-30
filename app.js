@@ -142,14 +142,6 @@ function syncCart() {
   const n = cartQty();
   const badge = $('#cartCount');
   if (badge) { badge.textContent = n; badge.hidden = n === 0; }
-  const fab = $('#cartOpen');
-  if (fab) fab.classList.toggle('empty', n === 0);
-  $$('[data-add]').forEach(b => {
-    const on = inCart(b.dataset.add);
-    b.classList.toggle('on', on);
-    b.textContent = on ? '✓' : '+';
-    b.setAttribute('aria-label', on ? 'Já está na sua lista' : 'Adicionar à sua lista');
-  });
   const cartBox = $('#cart');
   if (cartBox && !cartBox.hidden) renderCart();
 }
@@ -168,7 +160,7 @@ function renderCart() {
 
   if (!cart.length) {
     box.innerHTML = `<h2>Sua lista</h2>
-      <p class="cart-empty">Sua lista está vazia.<br>Toque no <b>+</b> de um produto para juntar vários itens e enviar tudo de uma vez.</p>
+      <p class="cart-empty">Sua lista está vazia.<br>Abra um produto e toque em <b>Adicionar à lista</b> para juntar vários itens e enviar tudo de uma vez.</p>
       <button class="btn alt" data-cart-close>Continuar vendo</button>`;
     return;
   }
@@ -290,7 +282,6 @@ function render() {
         <div class="pic">${pic(p)}${hasPromo(p) ? `<span class="off">-${offPct(p)}%</span>` : ''}</div>
         <div class="meta"><h3>${esc(p.name)}</h3>${priceHtml(p)}</div>
       </button>
-      <button class="add${inCart(p.id) ? ' on' : ''}" data-add="${esc(p.id)}" aria-label="${inCart(p.id) ? 'Já está na sua lista' : 'Adicionar à sua lista'}">${inCart(p.id) ? '✓' : '+'}</button>
     </article>`).join('');
   }
   const empty = $('#empty');

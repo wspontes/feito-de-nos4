@@ -29,7 +29,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Allura&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <header class="top">
@@ -55,7 +55,7 @@
     <div class="chips" id="chips"></div>
   </div>
   <div class="grid" id="grid"></div>
-  <p class="empty" id="empty" hidden>Nenhum produto encontrado. Tente outra busca ou categoria.</p>
+  <p class="empty-msg" id="empty" hidden>Nenhum produto encontrado. Tente outra busca ou categoria.</p>
 </main>
 
 <section class="info" id="pagamento">
@@ -87,15 +87,15 @@
   </svg>
 </a>
 
-<button class="cart-fab empty" id="cartOpen" aria-label="Minha lista">
+<button class="cart-fab" id="cartOpen" aria-label="Minha lista">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M6 7h12l-1.1 12.2H7.1L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
   <span class="n" id="cartCount" hidden>0</span>
 </button>
 
 <button id="scrollTop" class="scroll-top" aria-label="Voltar ao topo">↑</button>
 
-<script src="config.js?v=5"></script>
+<script src="config.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>
