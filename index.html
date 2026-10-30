@@ -24,10 +24,10 @@
   <h1>Uma caneca. Um nome. Uma história.</h1>
   <div class="banner-carousel" id="bannerCarousel">
     <div class="banner-track" id="bannerTrack"></div>
-    <button class="banner-prev" id="bannerPrev">‹</button>
-    <button class="banner-next" id="bannerNext">›</button>
+    <button class="banner-prev" id="bannerPrev" aria-label="Banner anterior">‹</button>
+    <button class="banner-next" id="bannerNext" aria-label="Próximo banner">›</button>
   </div>
-<div class="banner-dots" id="bannerDots"></div>
+  <div class="banner-dots" id="bannerDots"></div>
 </section>
 
 <main id="vitrine">
@@ -41,7 +41,7 @@
 
 <section class="info" id="pagamento">
   <h2>Formas de pagamento</h2>
-  
+
   <div class="pay-cards">
     <img src="assets/pagamento.png" alt="50% no ato da encomenda e 50% na entrega" loading="lazy">
     <img src="assets/como-fazer.png" alt="Como fazer seu pedido em 4 passos" loading="lazy">
@@ -61,10 +61,9 @@
 <div class="toast" id="toast" role="status"></div>
 
 <button id="scrollTop" class="scroll-top" aria-label="Voltar ao topo">↑</button>
-  
+
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="app.js"></script>
-  <button id="scrollTop" class="scroll-top" aria-label="Voltar ao topo">↑</button>
 </body>
 </html>
