@@ -1,7 +1,7 @@
 /* =========================================================
    Feito de Nós — app.js (completo)
-   Vitrine + modal + backoffice (produtos, categorias,
-   pedidos, textos, banners) + carrossel + voltar ao topo
+   Vitrine + modal + backoffice + carrossel + voltar ao topo
+   + WhatsApp flutuante + lista de interesse (carrinho)
    ========================================================= */
 
 const C = window.CONFIG || {};
@@ -15,6 +15,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const brl = n => (n == null || n === '') ? 'Consulte o valor' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const hasPromo = p => p.price != null && p.old_price != null && Number(p.old_price) > Number(p.price);
 const offPct = p => hasPromo(p) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0;
+const WA_NUMBER = C.WHATSAPP || '558391685057';
 
 const priceHtml = (p, inlineOff) => {
   const oldPrice = hasPromo(p) ? `<s>${brl(p.old_price)}</s>` : '';
@@ -60,12 +61,166 @@ const thumb = x => x.image_url
   ? `<img src="${esc(x.image_url)}" alt="">`
   : '<div class="th"></div>';
 
+/* trava o scroll e esconde os botões flutuantes */
+const lock = on => {
+  document.body.style.overflow = on ? 'hidden' : '';
+  document.body.classList.toggle('locked', on);
+};
+
+/* =========================================================
+   LISTA DE INTERESSE (carrinho)
+   Guardada no próprio navegador do cliente.
+   ========================================================= */
+const CART_KEY = 'fdn_lista_v1';
+let cart = [];
+
+function readCart() {
+  try {
+    const raw = localStorage.getItem(CART_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter(i => i && i.id)
+      .map(i => ({ id: String(i.id), name: String(i.name || ''), price: i.price == null ? null : Number(i.price), qty: Math.min(99, Math.max(1, Number(i.qty) || 1)) }));
+  } catch (e) { return []; }
+}
+function writeCart() {
+  try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch (e) { /* modo privado */ }
+}
+const inCart = id => cart.some(i => i.id === id);
+const cartQty = () => cart.reduce((s, i) => s + i.qty, 0);
+const cartPriced = () => cart.filter(i => i.price != null);
+const cartHasUnpriced = () => cartPriced().length !== cart.length;
+const cartTotal = () => cartPriced().reduce((s, i) => s + i.price * i.qty, 0);
+
+function addToCart(p) {
+  if (!p) return;
+  const it = cart.find(i => i.id === p.id);
+  if (it) it.qty = Math.min(99, it.qty + 1);
+  else cart.push({ id: String(p.id), name: p.name, price: p.price == null ? null : Number(p.price), qty: 1 });
+  writeCart();
+  syncCart();
+  toast(`${p.name} na sua lista.`);
+}
+
+function setQty(id, qty) {
+  const it = cart.find(i => i.id === id);
+  if (!it) return;
+  if (qty <= 0) cart = cart.filter(i => i.id !== id);
+  else it.qty = Math.min(99, qty);
+  writeCart();
+  syncCart();
+}
+
+function removeFromCart(id) {
+  cart = cart.filter(i => i.id !== id);
+  writeCart();
+  syncCart();
+}
+
+function clearCart() {
+  cart = [];
+  writeCart();
+  syncCart();
+}
+
+/* mantém nome e preço atualizados com o banco e descarta produtos removidos */
+function reconcileCart() {
+  if (!prods.length) return;
+  const before = cart.length;
+  cart = cart
+    .map(i => {
+      const p = prods.find(x => x.id === i.id);
+      if (!p || p.available === false) return null;
+      return { id: i.id, name: p.name, price: p.price == null ? null : Number(p.price), qty: i.qty };
+    })
+    .filter(Boolean);
+  if (cart.length !== before) writeCart();
+}
+
+function syncCart() {
+  const n = cartQty();
+  const badge = $('#cartCount');
+  if (badge) { badge.textContent = n; badge.hidden = n === 0; }
+  const fab = $('#cartOpen');
+  if (fab) fab.classList.toggle('empty', n === 0);
+  $$('[data-add]').forEach(b => {
+    const on = inCart(b.dataset.add);
+    b.classList.toggle('on', on);
+    b.textContent = on ? '✓' : '+';
+    b.setAttribute('aria-label', on ? 'Já está na sua lista' : 'Adicionar à sua lista');
+  });
+  const cartBox = $('#cart');
+  if (cartBox && !cartBox.hidden) renderCart();
+}
+
+function cartMessage() {
+  const linhas = cart.map(i => `${i.qty}x ${i.name} — ${i.price == null ? 'a combinar' : brl(i.price * i.qty)}`);
+  const total = cartPriced().length
+    ? `${brl(cartTotal())}${cartHasUnpriced() ? ' + itens a combinar' : ''}`
+    : 'a combinar';
+  return `Olá! Quero fazer um pedido:\n\n${linhas.join('\n')}\n\nTotal: ${total}`;
+}
+
+function renderCart() {
+  const box = $('#cartBody');
+  if (!box) return;
+
+  if (!cart.length) {
+    box.innerHTML = `<h2>Sua lista</h2>
+      <p class="cart-empty">Sua lista está vazia.<br>Toque no <b>+</b> de um produto para juntar vários itens e enviar tudo de uma vez.</p>
+      <button class="btn alt" data-cart-close>Continuar vendo</button>`;
+    return;
+  }
+
+  const rows = cart.map(i => `<div class="cart-item">
+      <div class="ci-t">
+        <b>${esc(i.name)}</b>
+        <small>${i.price == null ? 'a combinar' : brl(i.price)}</small>
+      </div>
+      <div class="qty">
+        <button data-qty="${esc(i.id)}" data-step="-1" aria-label="Diminuir">−</button>
+        <span>${i.qty}</span>
+        <button data-qty="${esc(i.id)}" data-step="1" aria-label="Aumentar">+</button>
+      </div>
+      <button class="ci-x" data-rm="${esc(i.id)}" aria-label="Remover">×</button>
+    </div>`).join('');
+
+  const totalTxt = cartPriced().length
+    ? `${brl(cartTotal())}${cartHasUnpriced() ? ' <small>+ itens a combinar</small>' : ''}`
+    : 'a combinar';
+
+  box.innerHTML = `<h2>Sua lista</h2>
+    <div class="cart-items">${rows}</div>
+    <div class="cart-total"><span>Total</span><b>${totalTxt}</b></div>
+    <a class="btn" target="_blank" rel="noopener" href="https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(cartMessage())}">${WA} Enviar pedido no WhatsApp</a>
+    <div class="cart-foot">
+      <button class="btn alt sm" data-cart-close>Continuar vendo</button>
+      <button class="btn alt sm" data-cart-clear>Limpar lista</button>
+    </div>
+    <p class="cart-note">O frete e o prazo são combinados na conversa.</p>`;
+}
+
+function openCart() {
+  const c = $('#cart');
+  if (!c) return;
+  renderCart();
+  c.hidden = false;
+  lock(true);
+}
+function closeCart() {
+  const c = $('#cart');
+  if (!c) return;
+  c.hidden = true;
+  lock(false);
+}
+
+/* ---------------- load ---------------- */
 async function prodQ() {
   const r = await sb.from('products').select('*').order('position').order('created_at', { ascending: false });
   return r.error ? sb.from('products').select('*').order('created_at', { ascending: false }) : r;
 }
 
-/* ---------------- load ---------------- */
 async function load() {
   if (!sb) {
     cats = ['Canecas', 'Quadros', 'Azulejos'].map((name, i) => ({ id: 'c' + i, name, active: true }));
@@ -94,7 +249,9 @@ async function load() {
     allBanners = b.data || [];
     banners = allBanners.filter(x => x.active !== false);
   }
+  reconcileCart();
   render();
+  syncCart();
 }
 
 /* ---------------- vitrine ---------------- */
@@ -128,10 +285,13 @@ function render() {
 
   const grid = $('#grid');
   if (grid) {
-    grid.innerHTML = list.map(p => `<button class="card" data-id="${esc(p.id)}">
-      <div class="pic">${pic(p)}${hasPromo(p) ? `<span class="off">-${offPct(p)}%</span>` : ''}</div>
-      <div class="meta"><h3>${esc(p.name)}</h3>${priceHtml(p)}</div>
-    </button>`).join('');
+    grid.innerHTML = list.map(p => `<article class="card">
+      <button class="card-open" data-id="${esc(p.id)}" aria-label="Ver ${esc(p.name)}">
+        <div class="pic">${pic(p)}${hasPromo(p) ? `<span class="off">-${offPct(p)}%</span>` : ''}</div>
+        <div class="meta"><h3>${esc(p.name)}</h3>${priceHtml(p)}</div>
+      </button>
+      <button class="add${inCart(p.id) ? ' on' : ''}" data-add="${esc(p.id)}" aria-label="${inCart(p.id) ? 'Já está na sua lista' : 'Adicionar à sua lista'}">${inCart(p.id) ? '✓' : '+'}</button>
+    </article>`).join('');
   }
   const empty = $('#empty');
   if (empty) empty.hidden = list.length > 0;
@@ -214,11 +374,12 @@ function openProduct(p) {
       <div class="cat">${esc(catPath(p.category_id))}</div>
       <p class="desc">${esc(p.description)}</p>
       ${priceHtml(p, true)}
-      <a class="btn" target="_blank" rel="noopener" href="https://wa.me/${C.WHATSAPP || '558391685057'}?text=${encodeURIComponent(msg)}">${WA} Pedir no WhatsApp</a>
+      <button class="btn alt" data-add="${esc(p.id)}">${inCart(p.id) ? '✓ Na sua lista' : '+ Adicionar à lista'}</button>
+      <a class="btn" target="_blank" rel="noopener" href="https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(msg)}" style="margin-top:8px">${WA} Pedir só este no WhatsApp</a>
     </div>
   </div>`;
   m.hidden = false;
-  document.body.style.overflow = 'hidden';
+  lock(true);
   const z = m.querySelector('.zoom');
   if (z) z.onclick = e => {
     const r = z.getBoundingClientRect();
@@ -232,7 +393,7 @@ function openProduct(p) {
 const closeModal = () => {
   const m = $('#modal');
   if (m) m.hidden = true;
-  document.body.style.overflow = '';
+  lock(false);
 };
 
 /* ---------------- backoffice ---------------- */
@@ -241,14 +402,14 @@ const adm = () => $('#admin');
 const closeAdmin = () => {
   const a = adm();
   if (a) a.hidden = true;
-  document.body.style.overflow = '';
+  lock(false);
 };
 
 function loginView() {
   const a = adm();
   if (!a) return;
   a.hidden = false;
-  document.body.style.overflow = 'hidden';
+  lock(true);
   a.innerHTML = `<form class="adm login" id="lf"><h2>Acesso da loja</h2>
     <label>Senha<input type="password" name="pw" autocomplete="current-password" required autofocus></label>
     <button class="btn">Entrar</button>
@@ -268,7 +429,7 @@ function adminPanel(tab, editing) {
   const a = adm();
   if (!a) return;
   a.hidden = false;
-  document.body.style.overflow = 'hidden';
+  lock(true);
 
   const tabs = [['produtos', 'Produtos'], ['categorias', 'Categorias'], ['pedidos', 'Pedidos'], ['textos', 'Textos'], ['banners', 'Banners']]
     .map(([k, n]) => `<button class="chip" data-tab="${k}" aria-pressed="${k === tab}">${n}</button>`).join('');
@@ -581,22 +742,51 @@ if (chipsBox) {
 }
 const searchEl = $('#search');
 if (searchEl) searchEl.oninput = e => { query = e.target.value; render(); };
+
 const gridEl = $('#grid');
 if (gridEl) gridEl.onclick = e => {
-  const b = e.target.closest('[data-id]');
-  if (b) openProduct(prods.find(p => p.id === b.dataset.id));
+  const add = e.target.closest('[data-add]');
+  if (add) { addToCart(prods.find(p => p.id === add.dataset.add)); return; }
+  const open = e.target.closest('[data-id]');
+  if (open) openProduct(prods.find(p => p.id === open.dataset.id));
 };
 
+/* modal do produto: adicionar e fechar */
 const modalEl = $('#modal');
 if (modalEl) modalEl.onclick = e => {
+  const add = e.target.closest('[data-add]');
+  if (add) {
+    const p = prods.find(x => x.id === add.dataset.add);
+    addToCart(p);
+    if (p) {
+      add.textContent = '✓ Na sua lista';
+      add.classList.add('on');
+    }
+    return;
+  }
   if (e.target.id === 'modal' || e.target.closest('.close')) closeModal();
 };
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    const m = $('#modal');
-    if (m && !m.hidden) closeModal();
+
+/* lista de interesse */
+const cartEl = $('#cart');
+if (cartEl) cartEl.onclick = e => {
+  const q = e.target.closest('[data-qty]');
+  if (q) {
+    const it = cart.find(i => i.id === q.dataset.qty);
+    if (it) setQty(it.id, it.qty + Number(q.dataset.step));
+    return;
   }
-});
+  const rm = e.target.closest('[data-rm]');
+  if (rm) { removeFromCart(rm.dataset.rm); return; }
+  if (e.target.closest('[data-cart-clear]')) {
+    if (confirm('Esvaziar a sua lista?')) clearCart();
+    return;
+  }
+  if (e.target.closest('[data-cart-close]') || e.target.id === 'cart') closeCart();
+};
+
+const cartBtn = $('#cartOpen');
+if (cartBtn) cartBtn.onclick = openCart;
 
 /* 5 toques na logo abrem o backoffice */
 const logoEl = $('#logo');
@@ -633,6 +823,13 @@ document.body.addEventListener('click', e => {
   }
 });
 
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const m = $('#modal'), c = $('#cart');
+  if (m && !m.hidden) closeModal();
+  else if (c && !c.hidden) closeCart();
+});
+
 let resizeT;
 window.addEventListener('resize', () => {
   clearTimeout(resizeT);
@@ -648,6 +845,12 @@ if (topBtn) {
   topBtn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+/* ---------------- WhatsApp flutuante ---------------- */
+const waFloat = $('#waFloat');
+if (waFloat) {
+  waFloat.href = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Olá! Vi o site da Feito de Nós e quero saber mais sobre as canecas personalizadas.')}`;
+}
+
 /* ---------------- link extra no rodapé ---------------- */
 const ft = document.querySelector('footer');
 if (ft && !ft.querySelector('a[href="monte.html"]')) {
@@ -655,6 +858,9 @@ if (ft && !ft.querySelector('a[href="monte.html"]')) {
 }
 
 /* ---------------- start ---------------- */
+cart = readCart();
+syncCart();
+
 load().then(startBannerTimer).catch(err => {
   console.error(err);
   toast('Não foi possível carregar a vitrine.');
