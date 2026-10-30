@@ -199,3 +199,191 @@ footer{display:flex;flex-direction:column;align-items:center;gap:2px;padding:26p
   visibility: visible;
 }
 .scroll-top:hover { opacity: 0.9; }
+
+/* ===== HEADER: MONTE SUA CANECA ===== */
+.top nav .nav-monte {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--sage-d);
+  border-radius: 999px;
+  background: var(--sage-d);
+  color: var(--paper);
+  font-size: 0.9rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.top nav .nav-monte:hover { opacity: 0.9; }
+
+/* ===== BANNER CARROUSEL (2 visíveis no desktop) ===== */
+.banner-carousel {
+  position: relative;
+  width: 100%;
+  height: clamp(160px, 30vw, 260px);
+  border-radius: 16px;
+  overflow: hidden;
+  margin: 18px 0;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+.banner-track {
+  display: flex;
+  gap: 12px;
+  width: max-content;
+  height: 100%;
+  transition: transform 0.5s ease;
+}
+.banner-slide {
+  flex: 0 0 auto;
+  width: calc(50% - 6px); /* 2 por linha no desktop */
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--blush);
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+.banner-slide::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,.55), transparent);
+  opacity: 0;
+  transition: .3s;
+}
+.banner-slide:hover::after { opacity: 1; }
+.banner-slide .badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--blush);
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(74,63,54,.25);
+}
+.banner-slide .title {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  color: var(--paper);
+  font-weight: 700;
+  font-size: clamp(1rem, 2vw, 1.3rem);
+  text-shadow: 0 1px 3px rgba(0,0,0,.6);
+  z-index: 2;
+}
+
+.banner-prev, .banner-next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,.85);
+  color: var(--ink);
+  font-size: 1.2rem;
+  cursor: pointer;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity .3s;
+}
+.banner-carousel:hover .banner-prev,
+.banner-carousel:hover .banner-next { opacity: 1; }
+.banner-prev { left: 8px; }
+.banner-next { right: 8px; }
+
+.banner-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.banner-dots .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: none;
+  background: var(--line);
+  cursor: pointer;
+  padding: 0;
+}
+.banner-dots .dot.active { background: var(--sage-d); }
+
+/* Responsivo: 1 banner por linha no mobile */
+@media (max-width: 640px) {
+  .banner-slide { width: calc(100% - 12px); }
+  .banner-carousel { height: clamp(120px, 35vw, 180px); }
+}
+
+/* ===== BOTÃO VOLTAR AO TOPO ===== */
+.scroll-top {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: var(--sage-d);
+  color: var(--paper);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: .3s;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(74,63,54,.3);
+}
+.scroll-top.show {
+  opacity: 1;
+  visibility: visible;
+}
+.scroll-top:hover { opacity: 0.9; }
+
+/* ===== PREÇO ANTIGO E NOVO ===== */
+.pr { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+.pr s {
+  font-size: 0.8rem;
+  font-weight: 300;
+  opacity: 0.6;
+  color: var(--sage-d);
+}
+.pr .price {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--sage-d);
+}
+.sheet .pr { margin: 0 0 14px; }
+.sheet .pr .price { font-size: 1.3rem; }
+.off {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--blush);
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(74,63,54,.25);
+}
+
+/* ===== ADMIN: TOGGLE CATEGORIA ===== */
+.adm .btn.toggle-cat {
+  background: none;
+  border: 1px solid var(--sage-d);
+  color: var(--sage-d);
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  margin-left: 6px;
+}
